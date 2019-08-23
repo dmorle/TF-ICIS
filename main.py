@@ -468,6 +468,7 @@ def runNetwork():
 def main():
 	#trainNetwork()
 	runNetwork()
+
 	return
 
 if __name__ == "__main__":
