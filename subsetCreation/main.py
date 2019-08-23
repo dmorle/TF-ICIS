@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from hilbertCurve import hilbertCurve
 
-dataPath = "C:\\Users\\dmorl\\Desktop\\File_Folder\\coding\\Python\\Computer Vision\\Tensorflow\\TF-ICIS\\dataSet-MNIST\\sorted\\"
-dumpPath = "C:\\Users\\dmorl\\Desktop\\File_Folder\\coding\\Python\\Computer Vision\\Tensorflow\\TF-ICIS\\subsetData\\"
+dataPath = "../../data/sorted/"
+dumpPath = "../../data/subsetData/"
 
 #recursively goes though folders and deletes them
 def deleteFolder(path):
@@ -14,14 +14,14 @@ def deleteFolder(path):
 			if (os.path.isfile(path + file)):
 				os.remove(path + file)
 			else:
-				deleteFolder(path + file + '\\')
+				deleteFolder(path + file + '/')
 		os.rmdir(path)
 	return
 
 # sets up the nessisary hard drive space
 def createFolders():
 	for i in range(10):
-		subfolder = dumpPath + str(i) + "\\"
+		subfolder = dumpPath + str(i) + "/"
 		os.mkdir(subfolder)
 	return
 
@@ -71,15 +71,15 @@ def displayImages(rowNum, colNum, imageArr, labelArr):
 def createAllSubsets():
 	# getting the memory space ready
 	for i in range(10):
-		deleteFolder(dumpPath + str(i) + "\\")
+		deleteFolder(dumpPath + str(i) + "/")
 	createFolders()
 
 	# create all subsets
 	for i in range(10): # iterating over all labels
 		for file in os.listdir(dataPath + str(i)): # iterating over all images in the label
 			createSubsets_noOverlap(
-				dataPath + str(i) + "\\" + file, 
-				dumpPath + str(i) + "\\" + file,
+				dataPath + str(i) + "/" + file, 
+				dumpPath + str(i) + "/" + file,
 				hilbertCurve(0)
 			)
 	return

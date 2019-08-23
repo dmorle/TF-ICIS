@@ -4,6 +4,8 @@ from GRU import *
 from CNN import *
 import matplotlib.pyplot as plt
 
+dataPath = "../data/subsetData/"
+
 def network(image, K, W, U, b, h, GRUStacks, M, N, subsetNum):
 
 	# running the CNN
@@ -127,7 +129,7 @@ def load_externals(batchNum, batchSize, Inputs, Labels):
 		for i in range(len(inputNums)):
 			for j in range(len(inputNums[i])):
 				n = i + 10*j
-				with open("subsetData/" + str(i) + "/Image_" + "{:04d}".format(inputNums[i][j]), "rb") as f:
+				with open(dataPath + str(i) + "/Image_" + "{:04d}".format(inputNums[i][j]), "rb") as f:
 					externals[Inputs[k][n]] = np.transpose(pickle.load(f), (0, 2, 3, 1))
 
 				label = [0]*10
@@ -176,7 +178,7 @@ def trainNetwork():
 	M = 50	# dimension of feature map
 	N = 10	# number of labels
 
-	learningRate = tf.cast(0.1, dtype = tf.float64)
+	learningRate = tf.cast(0.01, dtype = tf.float64)
 
 	"""
 		Creating the CNN variables
@@ -466,8 +468,8 @@ def runNetwork():
 	return
 
 def main():
-	#trainNetwork()
-	runNetwork()
+	trainNetwork()
+	#runNetwork()
 
 	return
 

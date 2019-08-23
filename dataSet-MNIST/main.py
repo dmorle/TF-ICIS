@@ -3,7 +3,7 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 
-dataPath = "C:\\Users\\dmorl\\Desktop\\File_Folder\\coding\\Python\\Computer Vision\\Tensorflow\\TF-ICIS\\dataSet-MNIST\\"
+dumpPath = "../../data/sorted/"
 
 def bytes_from_file(filename, chunksize=4):
     with open(filename, "rb") as f:
@@ -28,11 +28,11 @@ def deleteFolder(path):
 
 # sets up the nessisary hard drive space
 def createFolders():
-	folder = dataPath + "sorted\\"
+	folder = dumpPath
 	deleteFolder(folder)
 	os.mkdir(folder)
 	for i in range(10):
-		subfolder = folder + str(i) + "\\"
+		subfolder = folder + str(i) + "/"
 		os.mkdir(subfolder)
 	return
 
@@ -75,10 +75,10 @@ def displayImages(rowNum, colNum, imageArr, labelArr):
 	return
 
 def storeData(imageArr, labelArr):
-	folder = dataPath + "sorted\\"
+	folder = dumpPath
 	imageCount = [0]*10
 	for i in range(60000):
-		with open(folder + str(labelArr[i]) + "\\Image_" + "{:04d}".format(imageCount[labelArr[i]]), "wb") as f:
+		with open(folder + str(labelArr[i]) + "/Image_" + "{:04d}".format(imageCount[labelArr[i]]), "wb") as f:
 			pickle.dump(imageArr[i], f)
 
 		imageCount[labelArr[i]] += 1
@@ -89,7 +89,7 @@ def main():
 	labelArr = np.zeros((60000), dtype = np.uint8)
 
 	createFolders()
-	readImages(dataPath + "train-images.idx3-ubyte", dataPath + "train-labels.idx1-ubyte", imageArr, labelArr)
+	readImages("./train-images.idx3-ubyte", "./train-labels.idx1-ubyte", imageArr, labelArr)
 	storeData(imageArr, labelArr)
 
 	return
