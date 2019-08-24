@@ -110,7 +110,7 @@ def load_externals(batchNum, batchSize, Inputs, Labels):
 	# getting the number of inputs needed for each label
 	inputSizes = [batchSize//10]*10
 	for i in range(batchSize%10):
-		inputNums[i] += 1
+		inputSizes[i] += 1
 
 	# setting the initialization for all placeholders
 	externals = dict()
@@ -120,7 +120,7 @@ def load_externals(batchNum, batchSize, Inputs, Labels):
 		for i in range(10):
 			inputNums.append(np.random.randint(dataSizes[i], size = inputSizes[i]))
 
-		print("\nfor batch k, the input images are as follows:")
+		print("\nfor batch " + str(k) + ", the input images are as follows:")
 		for num in inputNums:
 			print(num)
 		print()
@@ -138,9 +138,23 @@ def load_externals(batchNum, batchSize, Inputs, Labels):
 		
 	return externals
 
-def runTrainSession(run_op, externals, batchNum, save_path, load_path = None):
+def getSaver(K, W, U, b):
+	(K0, K2, K4) = K
+	(Wz, Wr, Wp) = W
+	(Uz, Ur, Up) = U
+	(bz, br, bp) = b
 
-	saver = tf.train.Saver()
+	# dictionary of all network parameters
+	saveDict = {
+		"K0" : K0, "K2" : K2, "K4" : K4,
+		"Wz" : Wz, "Wr" : Wr, "Wp" : Wp,
+		"Uz" : Uz, "Ur" : Ur, "Up" : Up,
+		"bz" : bz, "br" : br, "bp" : bp
+	}
+
+	return tf.train.Saver(saveDict)
+
+def runTrainSession(run_op, saver, externals, save_path, load_path = None):
 
 	if load_path:
 		# running the graph
@@ -167,23 +181,19 @@ def runTrainSession(run_op, externals, batchNum, save_path, load_path = None):
 			saver.save(sess, save_path)
 	return
 
-def trainNetwork():
+def trainNetwork(learningRate, batchNum, batchSize, savePath, loadPath = None):
+	# resetting the current graph
+	tf.reset_default_graph()
+
 	# hyper-parameters
 
-	batchNum = 10	# Number of batchs trained on
-	batchSize = 10	# Number of images per batch
 	subsetNum = 4	# Number of subsets per image
 	subsetSize = (14, 14, 1)	# Size of each image subset
 
 	M = 50	# dimension of feature map
 	N = 10	# number of labels
 
-	learningRate = tf.cast(0.01, dtype = tf.float64)
-
-	"""
-		Creating the CNN variables
-
-	"""
+	learningRate = tf.cast(learningRate, dtype = tf.float64)
 
 	s0 = (subsetNum, 14, 14, 1)
 	s1 = (subsetNum, 12, 12, 10)
@@ -198,10 +208,14 @@ def trainNetwork():
 	ks4 = (2, 2, 25, 50)
 	ks = (ks0, ks2, ks4)
 
+	"""
+		Creating the CNN variables
+
+	"""
+
 	K0 = tf.get_variable(name = "K0", shape = ks0, initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	K2 = tf.get_variable(name = "K2", shape = ks2, initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	K4 = tf.get_variable(name = "K4", shape = ks4, initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
-	K = (K0, K2, K4)
 
 	"""
 		Creating the GRU cell variables
@@ -212,18 +226,21 @@ def trainNetwork():
 	Wz = tf.get_variable(name = "Wz", shape = (N, M), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	Wr = tf.get_variable(name = "Wr", shape = (N, M), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	Wp = tf.get_variable(name = "Wp", shape = (N, M), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
-	W = (Wz, Wr, Wp)
 
 	# U matricies are multiplied with x(t-1)
 	Uz = tf.get_variable(name = "Uz", shape = (N, N), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	Ur = tf.get_variable(name = "Ur", shape = (N, N), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	Up = tf.get_variable(name = "Up", shape = (N, N), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
-	U = (Uz, Ur, Up)
 	
 	# b vectors are N dimensional biases
 	bz = tf.get_variable(name = "bz", shape = (N, 1), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	br = tf.get_variable(name = "br", shape = (N, 1), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	bp = tf.get_variable(name = "bp", shape = (N, 1), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
+
+	# packing network parameters
+	K = (K0, K2, K4)
+	W = (Wz, Wr, Wp)
+	U = (Uz, Ur, Up)
 	b = (bz, br, bp)
 
 	# state h starts as a constant of 0s
@@ -275,9 +292,15 @@ def trainNetwork():
 		for n in range(batchSize):
 			yBatch.append(tf.placeholder(tf.float64, (10,)))
 		Labels.append(yBatch)
+
+	# loading the images and labels
+	externals = load_externals(batchNum, batchSize, Inputs, Labels)
+
+	# getting the network saver
+	saver = getSaver(K, W, U, b)
 	
 	# creating the graph
-	run_op = tf.group()
+	batchSizeMult = tf.constant(1/batchSize, dtype = tf.float64)
 	for k in range(batchNum):
 		runData = list()
 		"""
@@ -301,13 +324,16 @@ def trainNetwork():
 		b_grad = [tf.zeros(shape = (N, 1), dtype = tf.float64)] * 3
 		for n in range(batchSize-1, -1, -1):
 			(xn_grad, W_grad, U_grad, b_grad) = backpropGRU(runData[n], s, ks, K, W, U, b, Labels[k][n], M, N, subsetNum, W_grad, U_grad, b_grad)
-			x_grad.append(xn_grad)
+			x_grad.append(tf.multiply(batchSizeMult, xn_grad))
 
 		x_grad = x_grad[::-1]
 
 		(Wz_grad, Wr_grad, Wp_grad) = W_grad
 		(Uz_grad, Ur_grad, Up_grad) = U_grad
 		(bz_grad, br_grad, bp_grad) = b_grad
+		(Wz_grad, Wr_grad, Wp_grad) = (tf.multiply(batchSizeMult, Wz_grad), tf.multiply(batchSizeMult, Wr_grad), tf.multiply(batchSizeMult, Wp_grad))
+		(Uz_grad, Ur_grad, Up_grad) = (tf.multiply(batchSizeMult, Uz_grad), tf.multiply(batchSizeMult, Ur_grad), tf.multiply(batchSizeMult, Up_grad))
+		(bz_grad, br_grad, bp_grad) = (tf.multiply(batchSizeMult, bz_grad), tf.multiply(batchSizeMult, br_grad), tf.multiply(batchSizeMult, bp_grad))
 
 		grad_K = list()
 		for n in range(batchSize):
@@ -343,19 +369,24 @@ def trainNetwork():
 		br_op = tf.assign_sub(br, tf.multiply(learningRate, br_grad))
 		bp_op = tf.assign_sub(bp, tf.multiply(learningRate, bp_grad))
 
-		run_op = tf.group(run_op,
+		run_op = tf.group(
 			K0_op, K2_op, K4_op,
 			Wz_op, Wr_op, Wp_op,
 			Uz_op, Ur_op, Up_op,
-			bz_op, br_op, bp_op,
+			bz_op, br_op, bp_op
 		)
 
-	runTrainSession(run_op, load_externals(batchNum, batchSize, Inputs, Labels), batchNum, "saves/first_save.ckpt")
+		runTrainSession(run_op, saver, externals, savePath, loadPath)
+		loadPath = savePath
 
 	return
 
-def runNetwork():
+def runNetwork(loadPath, imageLabel, imageNum):
+	# resetting the current graph
+	tf.reset_default_graph()
+
 	# hyper-parameters
+
 	subsetNum = 4	# Number of subsets per image
 	subsetSize = (14, 14, 1)	# Size of each image subset
 
@@ -383,7 +414,6 @@ def runNetwork():
 	K0 = tf.get_variable(name = "K0", shape = ks0, initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	K2 = tf.get_variable(name = "K2", shape = ks2, initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	K4 = tf.get_variable(name = "K4", shape = ks4, initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
-	K = (K0, K2, K4)
 
 	"""
 		Creating the GRU cell variables
@@ -394,18 +424,21 @@ def runNetwork():
 	Wz = tf.get_variable(name = "Wz", shape = (N, M), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	Wr = tf.get_variable(name = "Wr", shape = (N, M), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	Wp = tf.get_variable(name = "Wp", shape = (N, M), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
-	W = (Wz, Wr, Wp)
 
 	# U matricies are multiplied with x(t-1)
 	Uz = tf.get_variable(name = "Uz", shape = (N, N), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	Ur = tf.get_variable(name = "Ur", shape = (N, N), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	Up = tf.get_variable(name = "Up", shape = (N, N), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
-	U = (Uz, Ur, Up)
 	
 	# b vectors are N dimensional biases
 	bz = tf.get_variable(name = "bz", shape = (N, 1), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	br = tf.get_variable(name = "br", shape = (N, 1), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
 	bp = tf.get_variable(name = "bp", shape = (N, 1), initializer = tf.truncated_normal_initializer(stddev = 0.1), dtype = tf.float64)
+	
+	# packing the network parameters
+	K = (K0, K2, K4)
+	W = (Wz, Wr, Wp)
+	U = (Uz, Ur, Up)
 	b = (bz, br, bp)
 
 	# state h starts as a constant of 0s
@@ -421,22 +454,6 @@ def runNetwork():
 	H_Stack = list()
 	stacks = (Z_Stack, ZT_Stack, R_Stack, RT_Stack, P_Stack, PT_Stack, H_Stack)
 
-	# initializing GRU gradients
-	Wz_grad = tf.zeros(name = "Wz_grad", shape = (N, M), dtype = tf.float64)
-	Wr_grad = tf.zeros(name = "Wr_grad", shape = (N, M), dtype = tf.float64)
-	Wp_grad = tf.zeros(name = "Wp_grad", shape = (N, M), dtype = tf.float64)
-	W_grad = (Wz_grad, Wr_grad, Wp_grad)
-
-	Uz_grad = tf.zeros(name = "Uz_grad", shape = (N, N), dtype = tf.float64)
-	Ur_grad = tf.zeros(name = "Ur_grad", shape = (N, N), dtype = tf.float64)
-	Up_grad = tf.zeros(name = "Up_grad", shape = (N, N), dtype = tf.float64)
-	U_grad = (Uz_grad, Ur_grad, Up_grad)
-
-	bz_grad = tf.zeros(name = "bz_grad", shape = (N, 1), dtype = tf.float64)
-	br_grad = tf.zeros(name = "br_grad", shape = (N, 1), dtype = tf.float64)
-	bp_grad = tf.zeros(name = "bp_grad", shape = (N, 1), dtype = tf.float64)
-	b_grad = (bz_grad, br_grad, bp_grad)
-
 	"""
 		The Graph
 
@@ -450,16 +467,18 @@ def runNetwork():
 
 	# creating the graph
 	h = network(Input, K, W, U, b, h, stacks, M, N, subsetNum)[1][6][subsetNum-1]
+	h = tf.multiply(tf.constant(0.5, tf.float64), tf.add(h, tf.constant(1, dtype = tf.float64)))
 
 	externals = dict()
-	with open("subsetData/0/Image_0000", "rb") as f:
+	with open(dataPath + str(imageLabel) + '/Image_' + "{:04d}".format(imageNum), "rb") as f:
 		externals[Input] = np.transpose(pickle.load(f), (0, 2, 3, 1))
-	externals[Label] = (1, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	externals[Label] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+	externals[Label][imageLabel] = 1
 
-	saver = tf.train.Saver()
+	saver = getSaver(K, W, U, b)
 
 	with tf.Session() as sess:
-		saver.restore(sess, "saves/first_save.ckpt")
+		saver.restore(sess, loadPath)
 
 		writer = tf.summary.FileWriter('graphs', sess.graph)
 
@@ -468,8 +487,29 @@ def runNetwork():
 	return
 
 def main():
-	trainNetwork()
-	#runNetwork()
+
+	train = True
+	test = True
+
+	if train:
+
+		learningRate = 0.0002
+
+		batchNum = 100	# Number of batchs trained on
+		batchSize = 1	# Number of images per batch
+
+		savePath = "./saves/testing.ckpt"
+		loadPath = None#"./saves/testing.ckpt"
+
+		trainNetwork(learningRate, batchNum, batchSize, savePath, loadPath)
+
+	if test:
+
+		loadPath = "./saves/testing.ckpt"
+		imageLabel = 3
+		imageNum = 0
+
+		runNetwork(loadPath, imageLabel, imageNum)
 
 	return
 
